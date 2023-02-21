@@ -1,20 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import FileUploadStatus from "./FileUploadStatus.svelte";
-  import S3Uploader from "./s3"
+  import { createEventDispatcher, onMount } from "svelte";
 
   let inputFiles: FileList;
   let fileInput: HTMLInputElement;
-  let progressTable = {};
-  let droppedFiles = []
 
-  // Service credentials
-  // export let S3Bucket: string;
-  // export let S3PublicKey: string;
+  const dispatch = createEventDispatcher();
 
   onMount(() => {
     fileInput.addEventListener("change", () => {
-      uploadFiles([...inputFiles])
+      [...inputFiles].forEach(dispatchFile)
     })
   })
 
@@ -25,48 +19,40 @@
 
   function onDrop(e: DragEvent) {
     e.preventDefault();
+
     if (e.dataTransfer.items) {
       [...e.dataTransfer.items].forEach((item) => {
         if (item.kind === 'file') {
-          droppedFiles.push(item.getAsFile())
+          dispatchFile(item.getAsFile())
         }
       });
-      uploadFiles(droppedFiles);
     } else {
-      droppedFiles = [...e.dataTransfer.files];
-      uploadFiles(droppedFiles);
+      [...e.dataTransfer.files].forEach(dispatchFile)
     }
   }
 
-  function uploadFiles(files: File[]) {
-    files.forEach(file => {
-      const reader = new FileReader()
-
-      reader.onload = (e) => {
-        const url = e.target.result;  
-        const uploader = new S3Uploader();
-        uploader.oncomplete = () => {
-          console.log("File upload complete")    
-        }
-        uploader.onprogress = (percent: number) => {
-          progressTable[file.name] = percent;
-        }
-        uploader.onabort = () => {
-          console.log("Aborting upload")  
-        }
-        uploader.onfail = (err: string) => {
-          console.log("Upload failed: ", err)
-        }
-        uploader.upload(url)
-      }
-      reader.readAsDataURL(file)  
-    })    
+  function dispatchFile(file: File) {
+    dispatch("fileSelected", {file})
   }
 
   function openFilePicker() {
     fileInput.click()
   }
 </script>
+
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<div
+  class="drop"
+  on:click={openFilePicker}
+  on:drop={onDrop}
+  on:dragover={onDrag}
+>
+  <div>Drag n' Drop</div>
+  <div>or</div>
+  <div>Click to select file</div>
+  <input type="file" bind:this={fileInput} bind:files={inputFiles} multiple />
+</div>
+
 
 <style>
   .drop {
@@ -82,34 +68,7 @@
     cursor: pointer;
   }
 
-  input[type=file] {
+  input[type="file"] {
     display: none;
   }
-
 </style>
-
-<!-- svelte-ignore a11y-click-events-have-key-events -->
-<div 
-  class="drop"
-  on:click={openFilePicker}
-  on:drop={onDrop} 
-  on:dragover={onDrag} 
->
-  <div>Drag n' Drop</div>
-  <div>or</div>
-  <div>Click to select file</div>
-  <input type="file" bind:this={fileInput} bind:files={inputFiles} multiple />
-</div>
-
-
-{#if inputFiles}
-  input files
-  {#each inputFiles as file}
-    <FileUploadStatus type={file.type} size={file.size} name={file.name} progress={progressTable[file.name]} />
-  {/each}
-{/if}
-
-{#each droppedFiles as file}
-  <FileUploadStatus type={file.type} size={file.size} name={file.name} progress={progressTable[file.name]} />
-{/each}
-
